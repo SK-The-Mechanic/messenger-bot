@@ -1,0 +1,36 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider  = "postgresql"
+     url       = env("DATABASE_URL")
+    directUrl = env("DIRECT_URL")
+}
+
+model ServicePricing {
+    id          String   @id @default(cuid())
+    category    String   // e.g. "Website", "App"
+    subType     String?  // e.g. "E-commerce App", "Health App", "Food Delivery App"
+    techStack   String   // e.g. "MERN"
+    minPriceBDT Int
+    maxPriceBDT Int
+    minPriceUSD Int
+    maxPriceUSD Int
+    notes       String?  // anything extra the AI should mention
+    active      Boolean  @default(true)
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+}
+
+model UnsupportedTech {
+    id        String   @id @default(cuid())
+    name      String   @unique // e.g. "Laravel", "PHP", "WordPress"
+    active    Boolean  @default(true)
+    createdAt DateTime @default(now())
+}
