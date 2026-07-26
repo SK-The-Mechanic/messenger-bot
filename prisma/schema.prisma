@@ -13,6 +13,14 @@ datasource db {
     directUrl = env("DIRECT_URL")
 }
 
+model ConversationMessage {
+    id        String   @id @default(cuid())
+    senderId  String
+    role      String   // "user" or "assistant"
+    content   String
+    createdAt DateTime @default(now())
+}
+
 model ServicePricing {
     id          String   @id @default(cuid())
     category    String   // e.g. "Website", "App"

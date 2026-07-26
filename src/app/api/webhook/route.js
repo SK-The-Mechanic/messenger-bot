@@ -30,7 +30,7 @@ export async function POST(request) {
                 console.log('USER MESSAGE:', userMessage);
 
                 try {
-                    const replyText = await handleMessage(userMessage);
+                    const replyText = await handleMessage(senderId, userMessage);
                     console.log('AI REPLY:', replyText);
                     await sendMessage(senderId, replyText);
                 } catch (err) {
@@ -44,33 +44,40 @@ export async function POST(request) {
     return new Response('Not Found', { status: 404 });
 }
 
-async function handleMessage(userMessage) {
+async function handleMessage(senderId, userMessage) {
     const pricingList = await prisma.servicePricing.findMany({ where: { active: true } });
     const unsupportedList = await prisma.unsupportedTech.findMany({ where: { active: true } });
 
     const pricingText = pricingList
-        .map(
-            (p) =>
-                `- ${p.category}${p.subType ? ' (' + p.subType + ')' : ''}: ${p.techStack}, ৳${p.minPriceBDT}-${p.maxPriceBDT} BDT ($${p.minPriceUSD}-${p.maxPriceUSD} USD)${p.notes ? ' — ' + p.notes : ''}`
-        )
+        .map((p) => `- ${p.category}${p.subType ? ' (' + p.subType + ')' : ''}: ${p.techStack}, ৳${p.minPriceBDT}-${p.maxPriceBDT} BDT ($${p.minPriceUSD}-${p.maxPriceUSD} USD)${p.notes ? ' — ' + p.notes : ''}`)
         .join('\n');
-
     const unsupportedText = unsupportedList.map((t) => t.name).join(', ');
 
     const systemPrompt = `You are the friendly assistant for SK Tech's Facebook Page, a freelance dev studio in Bangladesh.
-You reply in whichever language/mix the customer uses — English, Bangla, or Banglish — naturally and casually, like a real person chatting on Messenger.
+You reply in whichever language/mix the customer uses — English, Bangla, or Banglish — naturally and casually.
 
-If the customer just greets you (hi, hello, hey, kemon acho, etc.) — greet them back warmly and briefly, and ask how you can help. Don't jump into pricing unless they actually ask about a service.
+We build with: Next.js, React, Node.js, Express, MongoDB, PostgreSQL, React Native (for apps). These are all things we DO support — never reject a request just because it mentions Next.js specifically, since that's actually one of our main tools.
 
-Only when they ask about a website or app, use this pricing info:
+If the customer just greets you (hi, hello, hey, kemon acho, etc.) — greet them back warmly and briefly, ask how you can help. Don't jump into pricing unless they ask about a service.
+
+Pricing info:
 ${pricingText}
 
-We do NOT work with: ${unsupportedText}. If asked about these, politely decline without offering a price.
+We do NOT work with: ${unsupportedText}. Only decline if they specifically ask about one of these exact technologies.
 
 Rules:
-- Keep replies short — 1-3 sentences, casual Messenger tone, not a formal essay.
-- Ask what kind of app (E-commerce, Health, Food Delivery/navigation-style, etc.) if they mention "app" without specifying.
+- Keep replies short — 1-3 sentences, casual Messenger tone.
+- Ask what kind of app (E-commerce, Health, Food Delivery/navigation-style, etc.) if "app" is mentioned without specifics.
 - Always mention both BDT and USD when quoting a price.`;
+
+    // Fetch last 10 messages for this sender
+    const history = await prisma.conversationMessage.findMany({
+        where: { senderId },
+        orderBy: { createdAt: 'asc' },
+        take: 10,
+    });
+
+    const historyMessages = history.map((h) => ({ role: h.role, content: h.content }));
 
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
@@ -82,15 +89,24 @@ Rules:
             model: 'llama-3.3-70b-versatile',
             messages: [
                 { role: 'system', content: systemPrompt },
+                ...historyMessages,
                 { role: 'user', content: userMessage },
             ],
         }),
     });
 
     const data = await response.json();
-    console.log('GROQ RAW RESPONSE:', JSON.stringify(data));
+    const replyText = data.choices?.[0]?.message?.content || "Sorry, I couldn't process that right now.";
 
-    return data.choices?.[0]?.message?.content || "Sorry, I couldn't process that right now.";
+    // Save this exchange to history
+    await prisma.conversationMessage.createMany({
+        data: [
+            { senderId, role: 'user', content: userMessage },
+            { senderId, role: 'assistant', content: replyText },
+        ],
+    });
+
+    return replyText;
 }
 
 async function sendMessage(senderId, text) {
