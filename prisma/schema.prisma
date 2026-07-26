@@ -13,13 +13,6 @@ datasource db {
     directUrl = env("DIRECT_URL")
 }
 
-model ConversationMessage {
-    id        String   @id @default(cuid())
-    senderId  String
-    role      String   // "user" or "assistant"
-    content   String
-    createdAt DateTime @default(now())
-}
 
 model ServicePricing {
     id          String   @id @default(cuid())
@@ -40,5 +33,13 @@ model UnsupportedTech {
     id        String   @id @default(cuid())
     name      String   @unique // e.g. "Laravel", "PHP", "WordPress"
     active    Boolean  @default(true)
+    createdAt DateTime @default(now())
+}
+
+model ConversationMessage {
+    id        String   @id @default(cuid())
+    senderId  String
+    role      String
+    content   String
     createdAt DateTime @default(now())
 }
